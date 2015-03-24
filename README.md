@@ -11,3 +11,5 @@ Example of oauth2 application. Downloads all vidoefiles from Course by week
 
 3) Paste your client_id and client_secret to settings.py
 
+4) run <code>python3 weekDownloader.py </code> with <code>course_id</code> and <code>week</code> arguments 
+for example <code>python3 weekDownloader.py 91 4</code>
