@@ -1,5 +1,5 @@
 # stepic-oauth2-videodownloader
-Example of oauth2 application. Downloads all vidoefiles from Course by week
+Example of oauth2 application. Downloads all videofiles from Course by week
 
 1) Go to https://stepic.org/oauth2/applications/
 
