@@ -16,13 +16,18 @@ def get_all_weeks(stepic_resp):
 
 
 def get_unit_list(section_list, token):
-    resp = [json.loads(requests.get('https://stepic.org/api/sections/' + str(arr), headers={'Authorization': 'Bearer '+ token }).text) for arr in section_list]
+    resp = [json.loads(requests.get('https://stepic.org/api/sections/' + str(arr),
+                                    headers={'Authorization': 'Bearer '+ token }).text)
+            for arr in section_list]
     return [section['sections'][0]['units'] for section in resp]
 
 def get_steps_list(units_list, week, token):
-    data = [json.loads(requests.get('https://stepic.org/api/units/' + str(unit_id), headers={'Authorization': 'Bearer '+ token}).text) for unit_id in units_list[week-1]]
+    data = [json.loads(requests.get('https://stepic.org/api/units/' + str(unit_id),
+                                    headers={'Authorization': 'Bearer '+ token}).text)
+            for unit_id in units_list[week-1]]
     lesson_lists = [elem['units'][0]['lesson'] for elem in data]
-    data = [json.loads(requests.get('https://stepic.org/api/lessons/' + str(lesson_id), headers={'Authorization': 'Bearer '+ token}).text)['lessons'][0]['steps']
+    data = [json.loads(requests.get('https://stepic.org/api/lessons/' + str(lesson_id),
+                                    headers={'Authorization': 'Bearer '+ token}).text)['lessons'][0]['steps']
             for lesson_id in lesson_lists]
     return [item for sublist in data for item in sublist]
 
@@ -30,7 +35,8 @@ def get_steps_list(units_list, week, token):
 def get_only_video_steps(step_list, token):
     resp_list = list()
     for s in step_list:
-        resp = json.loads(requests.get('https://stepic.org/api/steps/' + str(s), headers={'Authorization': 'Bearer '+ token}).text)
+        resp = json.loads(requests.get('https://stepic.org/api/steps/' + str(s),
+                                       headers={'Authorization': 'Bearer '+ token}).text)
         if resp['steps'][0]['block']['video']:
             resp_list.append(resp['steps'][0]['block'])
     print('Only video:', len(resp_list))
@@ -39,8 +45,15 @@ def get_only_video_steps(step_list, token):
 
 def main(argv):
     if len(argv) != 2:
-        print('Input Error, pass 2 arguments. first - Course_id, second - week index.')
+        print('Input Error, pass 2 arguments. first - Course_id, second - Week index.')
         sys.exit('1')
+
+    """
+    Example how to receive token from Stepic.org
+    Token should also been add to every request header
+    example: requests.get(api_url, headers={'Authorization': 'Bearer '+ token})
+    """
+
     auth = HTTPBasicAuth(client_id, client_secret)
     resp = requests.post('https://stepic.org/oauth2/token/', data={'grant_type': 'client_credentials'}, auth=auth)
     token = json.loads(resp.text)['access_token']
