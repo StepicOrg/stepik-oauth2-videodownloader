@@ -1,15 +1,14 @@
-# stepic-oauth2-videodownloader
-Example of oauth2 application. Downloads all videofiles from Course by week
+# Stepic.org Video Downloader
 
-1) Go to https://stepic.org/oauth2/applications/
+Example of OAuth2 application for Stepic.org. Downloads all videofiles from a module (week) of a course.
 
-2) Register your application with settings:
+1. Go to https://stepic.org/oauth2/applications/
 
-<code> Client type: confidential </code>
+2. Register your application with settings:  
+`Client type: confidential`  
+`Authorization Grant Type: client-credentials`
 
-<code> Authorization Grant Type: client-credentials </code>
+3. Paste your `client_id` and `client_secret` to `settings.py`
 
-3) Paste your client_id and client_secret to settings.py
-
-4) run <code>python3 weekDownloader.py </code> with <code>course_id</code> and <code>week</code> arguments 
-for example <code>python3 weekDownloader.py 91 4</code>
+4. Run `python3 weekDownloader.py` with `course_id` and `week` arguments.  
+For example: `python3 weekDownloader.py 91 4`
