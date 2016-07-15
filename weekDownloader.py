@@ -62,8 +62,7 @@ def batch_main(argv):
     course_data = get_course_page('http://stepic.org/api/courses/' + argv[0], token)
     all_units = get_unit_list(get_all_weeks(course_data), token)
     all_steps = get_steps_list(all_units, int(argv[1]), token)
-    only_video_steps = get_only_video_steps(all_steps, token)
-    # url_list_with_q = [x['video']['urls'][0] for x in only_video_steps]
+    only_video_steps = get_only_video_steps(all_steps, token)    
     url_list_with_q = [url for x in only_video_steps for url in x['video']['urls'] if url['quality'] == argv[3]]
     url_list = [x['url'] for x in url_list_with_q]
 
