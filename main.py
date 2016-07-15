@@ -3,20 +3,43 @@ import os
 import weekDownloader
 
 if __name__ == "__main__":
+    # Set quality.
+    quality = '720'
 
+    courses = {}
+
+    # Add courses.
     # Course example.
-    # course_id = "1"
-    # course_weeks = ["1", "2", "3"]
+    courses["154"] = ["1", "2", "3"]
 
-    for item in course_weeks:
-        argv = []
-        argv.append(course_id)
-        argv.append(item)
+    for key, value in courses.items():
+        course_id = key
+        course_weeks = value
 
-        week_id = "week_" + item
+        for item in course_weeks:
+            argv = [course_id, item]
 
-        os.mkdir(week_id)
+            week_id = "week_" + item
 
-        argv.append(week_id)
+            folder_name = course_id + os.sep + week_id
 
-        weekDownloader.batch_main(argv)
+            try:
+                os.makedirs(folder_name)
+            except PermissionError:
+                print("Run the script from admin")
+                exit(1)
+            except FileExistsError:
+                print("Please delete the folder " + folder_name)
+                exit(1)
+
+            argv.append(folder_name)
+
+            argv.append(quality)
+
+            print("argv: {}".format(argv))
+
+            try:
+                weekDownloader.batch_main(argv)
+            except (KeyError, IndexError) as E:
+                print("! Error with course: ", "'" + folder_name + "',", "ErrorType: ", E)
+                continue

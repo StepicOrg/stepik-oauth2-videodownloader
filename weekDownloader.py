@@ -44,8 +44,9 @@ def get_only_video_steps(step_list, token):
 
 
 def batch_main(argv):
-    if len(argv) != 3:
-        print('Input Error, pass 2 arguments. first - Course_id, second - Week index.')
+    if len(argv) != 4:
+        print('Input Error, pass 2 arguments. first - Course_id, '
+              'second - Week index, third - folder name, forth - quality.')
         sys.exit('1')
 
     """
@@ -62,7 +63,8 @@ def batch_main(argv):
     all_units = get_unit_list(get_all_weeks(course_data), token)
     all_steps = get_steps_list(all_units, int(argv[1]), token)
     only_video_steps = get_only_video_steps(all_steps, token)
-    url_list_with_q = [x['video']['urls'][0] for x in only_video_steps]
+    # url_list_with_q = [x['video']['urls'][0] for x in only_video_steps]
+    url_list_with_q = [url for x in only_video_steps for url in x['video']['urls'] if url['quality'] == argv[3]]
     url_list = [x['url'] for x in url_list_with_q]
 
     folder_name = argv[2]
