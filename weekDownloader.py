@@ -45,7 +45,7 @@ def get_only_video_steps(step_list, token):
 
 def batch_main(argv):
     if len(argv) != 4:
-        print('Input Error, pass 2 arguments. first - Course_id, '
+        print('Input Error, pass 4 arguments. first - Course_id, '
               'second - Week index, third - folder name, forth - quality.')
         sys.exit('1')
 
