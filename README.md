@@ -8,7 +8,23 @@ Example of OAuth2 application for Stepic.org. Downloads all videofiles from a mo
 `Client type: confidential`  
 `Authorization Grant Type: client-credentials`
 
-3. Paste your `client_id` and `client_secret` to `settings.py`
+3. Add your `client_id` and `client_secret` to the system environment variable.
 
-4. Run `python3 weekDownloader.py` with `course_id` and `week` arguments.  
-For example: `python3 weekDownloader.py 91 4`
+4. Add courses which you want to download to the *courses* dictionary in the *main.py* file.
+
+  For example:
+  ```
+  courses[course_id] = [week_1, week_2, ...]
+  courses["154"] = ["1", "2", "3"]
+  courses[...] = [...]
+  ```
+
+  You could also set quality of the video by changing *quality* variable in the *main.py* file.
+  The default quality is 720.
+  
+  For example:
+  ```
+  quality = '720'
+  ```
+
+5. Run `python3 main.py`
