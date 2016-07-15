@@ -60,3 +60,7 @@ settings.py
 
 #videos
 *.mp4
+
+
+# Additional directories
+.idea/
