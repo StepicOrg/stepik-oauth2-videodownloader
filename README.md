@@ -24,7 +24,7 @@ Downloads all video files from a module (week) of a course or multiple weeks and
     
     Arguments:
     
-    first - Course_id, second - Week index, third - folder name, forth - quality.
+    first - course_id, second - week index, third - folder name, forth - quality.
 
   * Download all video files from multiple weeks and courses
     
