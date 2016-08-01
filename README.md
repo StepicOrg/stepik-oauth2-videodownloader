@@ -12,7 +12,9 @@ Downloads all video files from a module (week) of a course or multiple weeks and
 
 3. Add your `client_id` and `client_secret` to `settings.py`
 
-4-1. Download all video files from a module (week) of a course.
+4. 
+
+* Download all video files from a module (week) of a course.
 
 Run the script by the following command:
 
@@ -24,7 +26,7 @@ Arguments:
 
 first - Course_id, second - Week index, third - folder name, forth - quality.
 
-4-2. Download all video files from multiple weeks and courses.
+* Download all video files from multiple weeks and courses.
 
 Add courses which you want to download to the *courses* dictionary in the *settings.py* file.
 
