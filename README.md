@@ -15,7 +15,7 @@ Downloads all video files from a module (week) of a course or multiple weeks and
 4. Run the script
 
   * Download all video files from a module (week) of a course
-  
+    
     Run the script by the following command:
     
     ```
@@ -27,7 +27,13 @@ Downloads all video files from a module (week) of a course or multiple weeks and
     first - Course_id, second - Week index, third - folder name, forth - quality.
 
   * Download all video files from multiple weeks and courses
-  
+    
+    Run the script by the following command:
+    
+    ```
+    python3 multipleDownloader.py
+    ```  
+    
     Add courses which you want to download to the *courses* dictionary in the *settings.py* file.
     
     For example:
@@ -44,10 +50,4 @@ Downloads all video files from a module (week) of a course or multiple weeks and
     For example:
     ```
     quality = '720'
-    ```
-    
-    Run the script by the following command:
-    
-    ```
-    python3 multipleDownloader.py
     ```
