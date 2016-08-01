@@ -105,7 +105,7 @@ def main(argv):
     print('Folder_name ', folder_name)
 
     for i, el in enumerate(url_list):
-        filename = folder_name + '/' + 'Video_' + str(i) + '.mp4'
+        filename = os.path.join(folder_name, 'Video_' + str(i) + '.mp4')
         print('Downloading file ', filename)
         urllib.request.urlretrieve(el, filename)
         print('Done')
