@@ -1,6 +1,8 @@
 # Stepic.org Video Downloader
 
-Example of OAuth2 application for Stepic.org. Downloads all videofiles from a module (week) of a course.
+Example of OAuth2 application for Stepic.org. 
+
+Downloads all video files from a module (week) of a course or multiple weeks and courses.
 
 1. Go to https://stepic.org/oauth2/applications/
 
@@ -8,7 +10,44 @@ Example of OAuth2 application for Stepic.org. Downloads all videofiles from a mo
 `Client type: confidential`  
 `Authorization Grant Type: client-credentials`
 
-3. Paste your `client_id` and `client_secret` to `settings.py`
+3. Add your `client_id` and `client_secret` to `settings.py`
 
-4. Run `python3 weekDownloader.py` with `course_id` and `week` arguments.  
-For example: `python3 weekDownloader.py 91 4`
+4. Run the script
+
+  * Download all video files from a module (week) of a course
+    
+    Run the script by the following command:
+    
+    ```
+    python3 weekDownloader.py "154" "1" "." "720"
+    ```
+    
+    Arguments:
+    
+    first - course_id, second - week index, third - folder name, forth - quality.
+
+  * Download all video files from multiple weeks and courses
+    
+    Run the script by the following command:
+    
+    ```
+    python3 multipleDownloader.py
+    ```  
+    
+    Add courses which you want to download to the *courses* dictionary in the *settings.py* file.
+    
+    For example:
+    
+    ```
+    courses[course_id] = [week_1, week_2, ...]
+    courses["154"] = ["1", "2", "3"]
+    courses[...] = [...]
+    ```
+    
+    You could also set quality of the video by changing *quality* variable in the *settings.py* file.
+    The default quality is 720.
+    
+    For example:
+    ```
+    quality = '720'
+    ```
