@@ -71,22 +71,22 @@ def main(argv):
 
     for video_step in only_video_steps:
         video_link = None
+        msg = None
 
         # Check a video quality.
         for url in video_step['video']['urls']:
             if url['quality'] == argv[3]:
-                video_link = url
+                video_link = url['url']
 
         # If the is no required video quality then download
         # with the best available quality.
         if video_link is None:
-            print("The requested quality = {} is not available!".format(argv[2]))
+            msg = "The requested quality = {} is not available!".format(argv[2])
 
-            video_link = video_step['video']['urls'][0]
+            video_link = video_step['video']['urls'][0]['url']
 
-        url_list_with_q.append(video_link)
-
-    url_list = [x['url'] for x in url_list_with_q]
+        # Store link and quality.
+        url_list_with_q.append({'url': video_link, 'msg': msg})
 
     folder_name = argv[2]
 
@@ -104,10 +104,14 @@ def main(argv):
 
     print('Folder_name ', folder_name)
 
-    for i, el in enumerate(url_list):
+    for i, el in enumerate(url_list_with_q):
+        # Print a message if something wrong.
+        if el['msg']:
+            print("{}".format(el['msg']))
+
         filename = os.path.join(folder_name, 'Video_' + str(i) + '.mp4')
         print('Downloading file ', filename)
-        urllib.request.urlretrieve(el, filename)
+        urllib.request.urlretrieve(el['url'], filename)
         print('Done')
     print("All steps downloaded")
 
