@@ -1,10 +1,9 @@
-import getopt
-import os
-import requests
+import argparse
 import json
+import os
 import urllib
 import urllib.request
-import sys
+import requests
 from requests.auth import HTTPBasicAuth
 
 
@@ -45,66 +44,47 @@ def get_only_video_steps(step_list, token):
     return resp_list
 
 
-def main(argv):
+def parse_arguments():
     """
-    Parse input arguments with help of getopt.
+    Parse input arguments with help of argparse.
     """
 
-    help = 'usage: downloader [-h] ' \
-           '--course_id=COURSE_ID ' \
-           '--client_id=CLIENT_ID ' \
-           '--client_secret=CLIENT_SECRET ' \
-           '[--week_id=WEEK_ID] ' \
-           '[--quality=360|720|1080] ' \
-           '[--output_dir=.]' \
-           '\n\nMandatory parameters:\n' \
-           '-c, --client_id         your client_id from https://stepic.org/oauth2/applications/\n' \
-           '-s, --client_secret     your client_secret from https://stepic.org/oauth2/applications/\n' \
-           '-i, --course_id         course id\n' \
-           '\nOptional arguments:\n' \
-           '-w, --week_id           week id (if not set then download the whole course)\n' \
-           '-q, --quality           quality of a video. Default is 720\n' \
-           '-o, --output_dir        Output directory. Default is the current dolder\n' \
-           '-h, --help              shows help'
+    parser = argparse.ArgumentParser(
+        description='Stepic downloader')
 
-    course_id = None
-    client_id = None
-    client_secret = None
-    week_id = None
-    quality = 720
-    output_dir = '.'
+    parser.add_argument('-c', '--client_id',
+                        help='your client_id from https://stepic.org/oauth2/applications/',
+                        required=True)
 
-    try:
-        opts, args = getopt.getopt(argv, "hc:i:s:q:o:",
-                                   ["course_id=",
-                                    "client_id=",
-                                    "client_secret=",
-                                    "week_id=",
-                                    "quality=",
-                                    "output_dir="])
-    except getopt.GetoptError:
-        print(help)
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == '-h':
-            print(help)
-            sys.exit()
-        elif opt in ('-c', '--course_id'):
-            course_id = arg
-        elif opt in ('-i', '--client_id'):
-            client_id = arg
-        elif opt in ('-s', '--client_secret'):
-            client_secret = arg
-        elif opt in ('-w', '--week_id'):
-            week_id = int(arg)
-        elif opt in ('-q', '--quality'):
-            quality = arg
-        elif opt in ('-o', '--output_dir'):
-            output_dir = arg
+    parser.add_argument('-s', '--client_secret',
+                        help='your client_secret from https://stepic.org/oauth2/applications/',
+                        required=True)
 
-    check_argument(course_id, "course_id is wrong!", help)
-    check_argument(client_id, "client_id is wrong!", help)
-    check_argument(client_secret, "client_secret is wrong!", help)
+    parser.add_argument('-i', '--course_id',
+                        help='course id',
+                        required=True)
+
+    parser.add_argument('-w', '--week_id',
+                        help='week id starts from 1 (if not set then it will download the whole course)',
+                        type=int,
+                        default=None)
+
+    parser.add_argument('-q', '--quality',
+                        help='quality of a video. Default is 720',
+                        choices=['360', '720', '1080'],
+                        default='720')
+
+    parser.add_argument('-o', '--output_dir',
+                        help='output directory. Default is the current dolder',
+                        default='.')
+
+    args = parser.parse_args()
+
+    return args
+
+
+def main():
+    args = parse_arguments()
 
     """
     Example how to receive token from Stepic.org
@@ -112,11 +92,11 @@ def main(argv):
     example: requests.get(api_url, headers={'Authorization': 'Bearer '+ token})
     """
 
-    auth = HTTPBasicAuth(client_id, client_secret)
+    auth = HTTPBasicAuth(args.client_id, args.client_secret)
     resp = requests.post('https://stepic.org/oauth2/token/', data={'grant_type': 'client_credentials'}, auth=auth)
     token = json.loads(resp.text)['access_token']
 
-    course_data = get_course_page('http://stepic.org/api/courses/' + course_id, token)
+    course_data = get_course_page('http://stepic.org/api/courses/' + args.course_id, token)
 
     weeks_num = get_all_weeks(course_data)
 
@@ -127,8 +107,8 @@ def main(argv):
     # download only for the week_id is passed as an argument.
     for week in range(len(weeks_num)):
         # Skip if week_id is passed as an argument
-        if week_id:
-            if week != week_id:
+        if args.week_id:
+            if week != args.week_id:
                 continue
 
         all_steps = get_steps_list(all_units, week, token)
@@ -144,13 +124,13 @@ def main(argv):
 
             # Check a video quality.
             for url in video_step['video']['urls']:
-                if url['quality'] == quality:
+                if url['quality'] == args.quality:
                     video_link = url['url']
 
             # If the is no required video quality then download
             # with the best available quality.
             if video_link is None:
-                msg = "The requested quality = {} is not available!".format(quality)
+                msg = "The requested quality = {} is not available!".format(args.quality)
 
                 video_link = video_step['video']['urls'][0]['url']
 
@@ -158,7 +138,7 @@ def main(argv):
             url_list_with_q.append({'url': video_link, 'msg': msg})
 
         # Compose a folder name.
-        folder_name = os.path.join(output_dir, course_id, 'week_' + str(week))
+        folder_name = os.path.join(args.output_dir, args.course_id, 'week_' + str(week))
 
         # Create a folder if needed.
         if not os.path.isdir(folder_name):
@@ -186,22 +166,5 @@ def main(argv):
         print("All steps downloaded")
 
 
-def check_argument(parameter, msg, help_msg):
-    """
-    Check passing argument and if it is None
-    then print a message and a help message.
-
-    :param parameter: any variable
-    :param msg: message
-    :param help_msg: help message
-    :return: None
-    """
-    if parameter is None:
-        print(msg)
-        print()
-        print(help_msg)
-        sys.exit()
-
-
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()
