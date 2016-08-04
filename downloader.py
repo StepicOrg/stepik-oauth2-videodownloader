@@ -108,7 +108,8 @@ def main():
     for week in range(len(weeks_num)):
         # Skip if week_id is passed as an argument
         if args.week_id:
-            if week != args.week_id:
+            # week_id starts from 1 and week counts from 0!
+            if week != (args.week_id - 1):
                 continue
 
         all_steps = get_steps_list(all_units, week, token)
