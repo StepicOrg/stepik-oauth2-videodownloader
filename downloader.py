@@ -161,9 +161,16 @@ def main():
                 print("{}".format(el['msg']))
 
             filename = os.path.join(folder_name, 'Video_' + str(week) + '.mp4')
-            print('Downloading file ', filename)
-            urllib.request.urlretrieve(el['url'], filename)
-            print('Done')
+            if not os.path.isfile(filename):
+                try:
+                    print('Downloading file ', filename)
+                    urllib.request.urlretrieve(el['url'], filename)
+                    print('Done')
+                except:
+                    os.remove(filename)
+                    print('Error while downloading. File {} deleted:'.format(filename))
+            else:
+                print('File {} already exist'.format(filename))
         print("All steps downloaded")
 
 
