@@ -166,9 +166,14 @@ def main():
                     print('Downloading file ', filename)
                     urllib.request.urlretrieve(el['url'], filename)
                     print('Done')
-                except:
+                except urllib.error.ContentTooShortError:
                     os.remove(filename)
                     print('Error while downloading. File {} deleted:'.format(filename))
+                except KeyboardInterrupt:
+                    if os.path.isfile(filename):
+                        os.remove(filename)
+                    print('\nAborted')
+                    exit(1)
             else:
                 print('File {} already exist'.format(filename))
         print("All steps downloaded")
