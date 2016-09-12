@@ -104,15 +104,16 @@ def main():
     # Loop through all week in a course and
     # download all videos or
     # download only for the week_id is passed as an argument.
-    for week in range(len(weeks_num)):
+    for week in range(1, len(weeks_num)+1):
         # Skip if week_id is passed as an argument
-        if args.week_id:
+        args_week_id = str(args.week_id)
+        if args_week_id != "None":
             # week_id starts from 1 and week counts from 0!
-            if week != args.week_id:
+            if week != int(args_week_id):
                 continue
 
         all_steps = get_steps_list(all_units, week, token)
-        
+
         only_video_steps = get_only_video_steps(all_steps, token)
 
         url_list_with_q = []
