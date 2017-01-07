@@ -12,9 +12,9 @@ Downloads all video files from a module (week) of a course or the whole course.
 
 3. Install requests module
 
-```
-pip install requests
-```
+  ```
+  pip install requests
+  ```
 
 4. Run the script
 
