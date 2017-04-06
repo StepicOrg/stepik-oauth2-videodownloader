@@ -4,6 +4,7 @@ import os
 import urllib
 import urllib.request
 import requests
+import sys
 from requests.auth import HTTPBasicAuth
 
 
@@ -82,6 +83,16 @@ def parse_arguments():
 
     return args
 
+def reporthook(blocknum, blocksize, totalsize): # progressbar
+    readsofar = blocknum * blocksize
+    if totalsize > 0:
+        percent = readsofar * 1e2 / totalsize
+        s = "\r%5.1f%% %*d / %d" % (percent, len(str(totalsize)), readsofar, totalsize)
+        sys.stderr.write(s)
+        if readsofar >= totalsize: # near the end
+            sys.stderr.write("\n")
+    else: # total size is unknown
+        sys.stderr.write("read %d\n" % (readsofar,))
 
 def main():
     args = parse_arguments()
@@ -164,7 +175,7 @@ def main():
             if not os.path.isfile(filename):
                 try:
                     print('Downloading file ', filename)
-                    urllib.request.urlretrieve(el['url'], filename)
+                    urllib.request.urlretrieve(el['url'], filename, reporthook)
                     print('Done')
                 except urllib.error.ContentTooShortError:
                     os.remove(filename)
