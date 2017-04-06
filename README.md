@@ -4,7 +4,7 @@ Example of OAuth2 application for Stepic.org.
 
 Downloads all video files from a module (week) of a course or the whole course.
 
-1. Go to https://stepic.org/oauth2/applications/
+1. Go to https://stepik.org/oauth2/applications/
 
 2. Register your application with settings:  
 `Client type: confidential`  
