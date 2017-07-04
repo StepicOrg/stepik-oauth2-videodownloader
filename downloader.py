@@ -76,7 +76,7 @@ def parse_arguments():
                         default='720')
 
     parser.add_argument('-o', '--output_dir',
-                        help='output directory. Default is the current dolder',
+                        help='output directory. Default is the current folder',
                         default='.')
 
     args = parser.parse_args()
