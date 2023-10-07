@@ -3,10 +3,13 @@ import json
 import os
 import urllib
 import urllib.request
+import urllib.error
 import requests
 import sys
 from requests.auth import HTTPBasicAuth
-from typing import List
+from typing import List, Dict
+
+ID = int  # for type decoration
 
 
 class StepikDispatcher:
@@ -19,35 +22,23 @@ class StepikDispatcher:
     def authorized_get(self, url: str) -> str:
         return requests.get(url, headers={'Authorization': 'Bearer ' + self.token}).text
 
-    def get_course_page(self, api_url: str):  # TODO: add return type decoration
-        return json.loads(self.authorized_get(api_url))
+    def get_and_parse_authorized(self, url: str) -> Dict:
+        return json.loads(self.authorized_get(url))
 
-    def get_unit_list(self, section_list: List[int]) -> List[List[int]]:
-        resp = [json.loads(self.authorized_get('https://stepik.org/api/sections/' + str(arr)))
-                for arr in section_list]
-        return [section['sections'][0]['units'] for section in resp]
+    def get_course_page(self, course_id: ID) -> Dict:
+        return self.get_and_parse_authorized('http://stepik.org/api/courses/' + str(course_id))
 
-    def get_steps_list(self, units_list: List[int]) -> List[int]:
-        data = [json.loads(self.authorized_get('https://stepik.org/api/units/' + str(unit_id)))
-                for unit_id in units_list]
-        lesson_lists = [elem['units'][0]['lesson'] for elem in data]
-        data = [json.loads(self.authorized_get('https://stepik.org/api/lessons/' + str(lesson_id)))
-                ['lessons'][0]['steps']
-                for lesson_id in lesson_lists]
-        return [item for sublist in data for item in sublist]
+    def get_unit_ids_list(self, week_id: ID) -> List[ID]:
+        return self.get_and_parse_authorized('https://stepik.org/api/sections/' + str(week_id))['sections'][0]['units']
 
-    def get_only_video_steps(self, step_list: List[int]):  # TODO: add return type decorations
-        resp_list = list()
-        for s in step_list:
-            resp = json.loads(self.authorized_get('https://stepik.org/api/steps/' + str(s)))
-            if resp['steps'][0]['block']['video']:
-                resp_list.append(resp['steps'][0]['block'])
-        print('Only video:', len(resp_list))
-        return resp_list
+    def get_lesson_id(self, unit_id: ID) -> ID:
+        return self.get_and_parse_authorized('https://stepik.org/api/units/' + str(unit_id))['units'][0]['lesson']
 
+    def get_step_ids_list(self, lesson_id: ID) -> List[ID]:
+        return self.get_and_parse_authorized('https://stepik.org/api/lessons/' + str(lesson_id))['lessons'][0]['steps']
 
-def get_all_weeks(stepik_resp):
-    return stepik_resp['courses'][0]['sections']
+    def get_step(self, step_id: ID) -> Dict:
+        return self.get_and_parse_authorized('https://stepik.org/api/steps/' + str(step_id))
 
 
 def parse_arguments():
@@ -68,6 +59,7 @@ def parse_arguments():
 
     parser.add_argument('-i', '--course_id',
                         help='course id',
+                        type=int,
                         required=True)
 
     parser.add_argument('-w', '--week_id',
@@ -111,26 +103,35 @@ def main():
     """
     stepik_dispatcher = StepikDispatcher(args.client_id, args.client_secret)
 
-    # TODO: out of course data we only use weeks_num!!!
-    course_data = stepik_dispatcher.get_course_page('http://stepik.org/api/courses/' + args.course_id)
+    # TODO: out of course data we only use week_ids!!!
+    course_data = stepik_dispatcher.get_course_page(args.course_id)
 
-    weeks_num = get_all_weeks(course_data)
+    def get_all_week_ids(stepik_resp):
+        return stepik_resp['courses'][0]['sections']
 
-    all_units = stepik_dispatcher.get_unit_list(weeks_num)
+    week_ids = get_all_week_ids(course_data)
+
+    all_unit_ids = [stepik_dispatcher.get_unit_ids_list(week_id) for week_id in week_ids]
     # Loop through all week in a course and
     # download all videos or
     # download only for the week_id is passed as an argument.
-    for week in range(1, len(weeks_num)+1):
+    for week_num in range(1, len(week_ids)+1):
         # Skip if week_id is passed as an argument
         args_week_id = str(args.week_id)
         if args_week_id != "None":
-            # week_id starts from 1 and week counts from 0!
-            if week != int(args_week_id):
+            if week_num != int(args_week_id):
                 continue
 
-        all_steps = stepik_dispatcher.get_steps_list(all_units[week - 1])
+        all_lesson_ids = [stepik_dispatcher.get_lesson_id(unit_id) for unit_id in all_unit_ids[week_num - 1]]
+        all_step_ids = [stepik_dispatcher.get_step_ids_list(lesson_id) for lesson_id in all_lesson_ids]
+        all_step_ids = [step_id for steps_list in all_step_ids for step_id in steps_list]  # flattening list of step_ids
 
-        only_video_steps = stepik_dispatcher.get_only_video_steps(all_steps)
+        all_steps_data = [stepik_dispatcher.get_step(step_id) for step_id in all_step_ids]
+
+        def step_has_video(step_data) -> bool:
+            return step_data['steps'][0]['block']['video']
+
+        only_video_steps = [step_info['steps'][0]['block'] for step_info in all_steps_data if step_has_video(step_info)]
 
         url_list_with_q = []
 
@@ -156,7 +157,7 @@ def main():
             url_list_with_q.append({'url': video_link, 'msg': msg})
 
         # Compose a folder name.
-        folder_name = os.path.join(args.output_dir, args.course_id, 'week_' + str(week))
+        folder_name = os.path.join(args.output_dir, str(args.course_id), 'week_' + str(week_num))
 
         # Create a folder if needed.
         if not os.path.isdir(folder_name):
@@ -172,12 +173,12 @@ def main():
 
         print('Folder_name ', folder_name)
 
-        for week, el in enumerate(url_list_with_q):
+        for video_num, el in enumerate(url_list_with_q):
             # Print a message if something wrong.
             if el['msg']:
                 print("{}".format(el['msg']))
 
-            filename = os.path.join(folder_name, 'Video_' + str(week) + '.mp4')
+            filename = os.path.join(folder_name, 'Video_' + str(video_num) + '.mp4')
             if not os.path.isfile(filename):
                 try:
                     print('Downloading file ', filename)
