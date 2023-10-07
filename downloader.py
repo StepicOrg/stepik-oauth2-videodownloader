@@ -6,39 +6,40 @@ import urllib.request
 import requests
 import sys
 from requests.auth import HTTPBasicAuth
+from typing import List
 
 
 class StepikDispatcher:
     def __init__(self, client_id: str, client_secret: str):
         auth = HTTPBasicAuth(client_id, client_secret)
         resp = requests.post('https://stepik.org/oauth2/token/', data={'grant_type': 'client_credentials'}, auth=auth)
-        self.token = json.loads(resp.text)['access_token']
+        self.token: str = json.loads(resp.text)['access_token']
         # TODO: add check whether we get the token?
 
-    def get_course_page(self, api_url: str):  # TODO: add return type decoration
-        return json.loads(requests.get(api_url, headers={'Authorization': 'Bearer ' + self.token}).text)
+    def authorized_get(self, url: str) -> str:
+        return requests.get(url, headers={'Authorization': 'Bearer ' + self.token}).text
 
-    def get_unit_list(self, section_list):  # TODO: add type decorations
-        resp = [json.loads(requests.get('https://stepik.org/api/sections/' + str(arr),
-                                        headers={'Authorization': 'Bearer ' + self.token}).text)
+    def get_course_page(self, api_url: str):  # TODO: add return type decoration
+        return json.loads(self.authorized_get(api_url))
+
+    def get_unit_list(self, section_list: List[int]) -> List[List[int]]:
+        resp = [json.loads(self.authorized_get('https://stepik.org/api/sections/' + str(arr)))
                 for arr in section_list]
         return [section['sections'][0]['units'] for section in resp]
 
-    def get_steps_list(self, units_list, week: int):  # TODO: add type decorations
-        data = [json.loads(requests.get('https://stepik.org/api/units/' + str(unit_id),
-                                        headers={'Authorization': 'Bearer ' + self.token}).text)
-                for unit_id in units_list[week - 1]]
+    def get_steps_list(self, units_list: List[int]) -> List[int]:
+        data = [json.loads(self.authorized_get('https://stepik.org/api/units/' + str(unit_id)))
+                for unit_id in units_list]
         lesson_lists = [elem['units'][0]['lesson'] for elem in data]
-        data = [json.loads(requests.get('https://stepik.org/api/lessons/' + str(lesson_id),
-                                        headers={'Authorization': 'Bearer ' + self.token}).text)['lessons'][0]['steps']
+        data = [json.loads(self.authorized_get('https://stepik.org/api/lessons/' + str(lesson_id)))
+                ['lessons'][0]['steps']
                 for lesson_id in lesson_lists]
         return [item for sublist in data for item in sublist]
 
-    def get_only_video_steps(self, step_list):  # TODO: add type decorations
+    def get_only_video_steps(self, step_list: List[int]):  # TODO: add return type decorations
         resp_list = list()
         for s in step_list:
-            resp = json.loads(requests.get('https://stepik.org/api/steps/' + str(s),
-                                           headers={'Authorization': 'Bearer ' + self.token}).text)
+            resp = json.loads(self.authorized_get('https://stepik.org/api/steps/' + str(s)))
             if resp['steps'][0]['block']['video']:
                 resp_list.append(resp['steps'][0]['block'])
         print('Only video:', len(resp_list))
@@ -96,8 +97,9 @@ def reporthook(blocknum, blocksize, totalsize):  # progressbar
         sys.stderr.write(s)
         if readsofar >= totalsize:  # near the end
             sys.stderr.write("\n")
-    else: # total size is unknown
+    else:  # total size is unknown
         sys.stderr.write("read %d\n" % (readsofar,))
+
 
 def main():
     args = parse_arguments()
@@ -109,6 +111,7 @@ def main():
     """
     stepik_dispatcher = StepikDispatcher(args.client_id, args.client_secret)
 
+    # TODO: out of course data we only use weeks_num!!!
     course_data = stepik_dispatcher.get_course_page('http://stepik.org/api/courses/' + args.course_id)
 
     weeks_num = get_all_weeks(course_data)
@@ -125,7 +128,7 @@ def main():
             if week != int(args_week_id):
                 continue
 
-        all_steps = stepik_dispatcher.get_steps_list(all_units, week)
+        all_steps = stepik_dispatcher.get_steps_list(all_units[week - 1])
 
         only_video_steps = stepik_dispatcher.get_only_video_steps(all_steps)
 
@@ -140,6 +143,7 @@ def main():
             for url in video_step['video']['urls']:
                 if url['quality'] == args.quality:
                     video_link = url['url']
+                    break
 
             # If the is no required video quality then download
             # with the best available quality.
