@@ -4,10 +4,12 @@ import os
 import urllib
 import urllib.request
 import urllib.error
+from dataclasses import dataclass
+
 import requests
 import sys
 from requests.auth import HTTPBasicAuth
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 ID = int  # for type decoration
 
@@ -39,6 +41,44 @@ class StepikDispatcher:
 
     def get_step(self, step_id: ID) -> Dict:
         return self.get_and_parse_authorized('https://stepik.org/api/steps/' + str(step_id))
+
+
+@dataclass
+class StepikVideoUrl:
+    available_qualities: List[Dict[str, str]]
+
+
+def get_course_videos_urls_by_section(course_id: ID,
+                                      stepik_dispatcher: StepikDispatcher,
+                                      only_from_week_number: Optional[int] = None) -> List[List[StepikVideoUrl]]:
+    # TODO: out of course data we only use week_ids!!!
+    course_data = stepik_dispatcher.get_course_page(course_id)
+
+    def get_all_week_ids(stepik_resp):
+        return stepik_resp['courses'][0]['sections']
+
+    week_ids = get_all_week_ids(course_data)
+
+    all_unit_ids = [stepik_dispatcher.get_unit_ids_list(week_id) for week_id in week_ids]
+
+    videos_by_section: List[List[StepikVideoUrl]] = []
+    for week_num in range(1, len(week_ids) + 1):
+        if only_from_week_number is not None and week_num != only_from_week_number:
+            continue
+
+        all_lesson_ids = [stepik_dispatcher.get_lesson_id(unit_id) for unit_id in all_unit_ids[week_num - 1]]
+        all_step_ids = [stepik_dispatcher.get_step_ids_list(lesson_id) for lesson_id in all_lesson_ids]
+        all_step_ids = [step_id for steps_list in all_step_ids for step_id in steps_list]  # flattening list of step_ids
+
+        all_steps_data = [stepik_dispatcher.get_step(step_id) for step_id in all_step_ids]
+
+        def step_has_video(step_data) -> bool:
+            return step_data['steps'][0]['block']['video']
+
+        only_video_blocks = [step_info['steps'][0]['block'] for step_info in all_steps_data if step_has_video(step_info)]
+        week_videos = [StepikVideoUrl(available_qualities=block['video']['urls']) for block in only_video_blocks]
+        videos_by_section.append(week_videos)
+    return videos_by_section
 
 
 def parse_arguments():
@@ -103,55 +143,33 @@ def main():
     """
     stepik_dispatcher = StepikDispatcher(args.client_id, args.client_secret)
 
-    # TODO: out of course data we only use week_ids!!!
-    course_data = stepik_dispatcher.get_course_page(args.course_id)
+    video_urls_by_section = get_course_videos_urls_by_section(args.course_id, stepik_dispatcher, args.week_id)
 
-    def get_all_week_ids(stepik_resp):
-        return stepik_resp['courses'][0]['sections']
-
-    week_ids = get_all_week_ids(course_data)
-
-    all_unit_ids = [stepik_dispatcher.get_unit_ids_list(week_id) for week_id in week_ids]
     # Loop through all week in a course and
     # download all videos or
     # download only for the week_id is passed as an argument.
-    for week_num in range(1, len(week_ids)+1):
-        # Skip if week_id is passed as an argument
-        args_week_id = str(args.week_id)
-        if args_week_id != "None":
-            if week_num != int(args_week_id):
-                continue
-
-        all_lesson_ids = [stepik_dispatcher.get_lesson_id(unit_id) for unit_id in all_unit_ids[week_num - 1]]
-        all_step_ids = [stepik_dispatcher.get_step_ids_list(lesson_id) for lesson_id in all_lesson_ids]
-        all_step_ids = [step_id for steps_list in all_step_ids for step_id in steps_list]  # flattening list of step_ids
-
-        all_steps_data = [stepik_dispatcher.get_step(step_id) for step_id in all_step_ids]
-
-        def step_has_video(step_data) -> bool:
-            return step_data['steps'][0]['block']['video']
-
-        only_video_steps = [step_info['steps'][0]['block'] for step_info in all_steps_data if step_has_video(step_info)]
+    for week_num, video_urls in enumerate(video_urls_by_section, start=1):
 
         url_list_with_q = []
 
         # Loop through videos and store the url link and the quality.
-        for video_step in only_video_steps:
+        for video in video_urls:
             video_link = None
             msg = None
 
             # Check a video quality.
-            for url in video_step['video']['urls']:
-                if url['quality'] == args.quality:
-                    video_link = url['url']
-                    break
+            for link in video.available_qualities:
+                match link:
+                    case {'quality': args.quality, 'url': url}:
+                        video_link = url
+                        break
 
-            # If the is no required video quality then download
+            # If there is no required video quality then download
             # with the best available quality.
             if video_link is None:
                 msg = "The requested quality = {} is not available!".format(args.quality)
 
-                video_link = video_step['video']['urls'][0]['url']
+                video_link = video.available_qualities[0]['url']
 
             # Store link and quality.
             url_list_with_q.append({'url': video_link, 'msg': msg})
