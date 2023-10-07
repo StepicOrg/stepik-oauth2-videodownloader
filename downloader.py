@@ -8,41 +8,45 @@ import sys
 from requests.auth import HTTPBasicAuth
 
 
-def get_course_page(api_url, token):
-    return json.loads(requests.get(api_url, headers={'Authorization': 'Bearer ' + token}).text)
+class StepikDispatcher:
+    def __init__(self, client_id: str, client_secret: str):
+        auth = HTTPBasicAuth(client_id, client_secret)
+        resp = requests.post('https://stepik.org/oauth2/token/', data={'grant_type': 'client_credentials'}, auth=auth)
+        self.token = json.loads(resp.text)['access_token']
+        # TODO: add check whether we get the token?
+
+    def get_course_page(self, api_url: str):  # TODO: add return type decoration
+        return json.loads(requests.get(api_url, headers={'Authorization': 'Bearer ' + self.token}).text)
+
+    def get_unit_list(self, section_list):  # TODO: add type decorations
+        resp = [json.loads(requests.get('https://stepik.org/api/sections/' + str(arr),
+                                        headers={'Authorization': 'Bearer ' + self.token}).text)
+                for arr in section_list]
+        return [section['sections'][0]['units'] for section in resp]
+
+    def get_steps_list(self, units_list, week: int):  # TODO: add type decorations
+        data = [json.loads(requests.get('https://stepik.org/api/units/' + str(unit_id),
+                                        headers={'Authorization': 'Bearer ' + self.token}).text)
+                for unit_id in units_list[week - 1]]
+        lesson_lists = [elem['units'][0]['lesson'] for elem in data]
+        data = [json.loads(requests.get('https://stepik.org/api/lessons/' + str(lesson_id),
+                                        headers={'Authorization': 'Bearer ' + self.token}).text)['lessons'][0]['steps']
+                for lesson_id in lesson_lists]
+        return [item for sublist in data for item in sublist]
+
+    def get_only_video_steps(self, step_list):  # TODO: add type decorations
+        resp_list = list()
+        for s in step_list:
+            resp = json.loads(requests.get('https://stepik.org/api/steps/' + str(s),
+                                           headers={'Authorization': 'Bearer ' + self.token}).text)
+            if resp['steps'][0]['block']['video']:
+                resp_list.append(resp['steps'][0]['block'])
+        print('Only video:', len(resp_list))
+        return resp_list
 
 
 def get_all_weeks(stepik_resp):
     return stepik_resp['courses'][0]['sections']
-
-
-def get_unit_list(section_list, token):
-    resp = [json.loads(requests.get('https://stepik.org/api/sections/' + str(arr),
-                                    headers={'Authorization': 'Bearer ' + token}).text)
-            for arr in section_list]
-    return [section['sections'][0]['units'] for section in resp]
-
-
-def get_steps_list(units_list, week, token):
-    data = [json.loads(requests.get('https://stepik.org/api/units/' + str(unit_id),
-                                    headers={'Authorization': 'Bearer ' + token}).text)
-            for unit_id in units_list[week - 1]]
-    lesson_lists = [elem['units'][0]['lesson'] for elem in data]
-    data = [json.loads(requests.get('https://stepik.org/api/lessons/' + str(lesson_id),
-                                    headers={'Authorization': 'Bearer ' + token}).text)['lessons'][0]['steps']
-            for lesson_id in lesson_lists]
-    return [item for sublist in data for item in sublist]
-
-
-def get_only_video_steps(step_list, token):
-    resp_list = list()
-    for s in step_list:
-        resp = json.loads(requests.get('https://stepik.org/api/steps/' + str(s),
-                                       headers={'Authorization': 'Bearer ' + token}).text)
-        if resp['steps'][0]['block']['video']:
-            resp_list.append(resp['steps'][0]['block'])
-    print('Only video:', len(resp_list))
-    return resp_list
 
 
 def parse_arguments():
@@ -83,13 +87,14 @@ def parse_arguments():
 
     return args
 
-def reporthook(blocknum, blocksize, totalsize): # progressbar
+
+def reporthook(blocknum, blocksize, totalsize):  # progressbar
     readsofar = blocknum * blocksize
     if totalsize > 0:
         percent = readsofar * 1e2 / totalsize
         s = "\r%5.1f%% %*d / %d" % (percent, len(str(totalsize)), readsofar, totalsize)
         sys.stderr.write(s)
-        if readsofar >= totalsize: # near the end
+        if readsofar >= totalsize:  # near the end
             sys.stderr.write("\n")
     else: # total size is unknown
         sys.stderr.write("read %d\n" % (readsofar,))
@@ -102,16 +107,13 @@ def main():
     Token should also been add to every request header
     example: requests.get(api_url, headers={'Authorization': 'Bearer '+ token})
     """
+    stepik_dispatcher = StepikDispatcher(args.client_id, args.client_secret)
 
-    auth = HTTPBasicAuth(args.client_id, args.client_secret)
-    resp = requests.post('https://stepik.org/oauth2/token/', data={'grant_type': 'client_credentials'}, auth=auth)
-    token = json.loads(resp.text)['access_token']
-
-    course_data = get_course_page('http://stepik.org/api/courses/' + args.course_id, token)
+    course_data = stepik_dispatcher.get_course_page('http://stepik.org/api/courses/' + args.course_id)
 
     weeks_num = get_all_weeks(course_data)
 
-    all_units = get_unit_list(weeks_num, token)
+    all_units = stepik_dispatcher.get_unit_list(weeks_num)
     # Loop through all week in a course and
     # download all videos or
     # download only for the week_id is passed as an argument.
@@ -123,9 +125,9 @@ def main():
             if week != int(args_week_id):
                 continue
 
-        all_steps = get_steps_list(all_units, week, token)
+        all_steps = stepik_dispatcher.get_steps_list(all_units, week)
 
-        only_video_steps = get_only_video_steps(all_steps, token)
+        only_video_steps = stepik_dispatcher.get_only_video_steps(all_steps)
 
         url_list_with_q = []
 
