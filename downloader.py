@@ -27,20 +27,35 @@ class StepikDispatcher:
     def get_and_parse_authorized(self, url: str) -> Dict:
         return json.loads(self.authorized_get(url))
 
-    def get_course_page(self, course_id: ID) -> Dict:
-        return self.get_and_parse_authorized('http://stepik.org/api/courses/' + str(course_id))
+    TParsedStepikResponse = Dict  # contains "meta" key and requested "api_resource" key
 
-    def get_unit_ids_list(self, week_id: ID) -> List[ID]:
-        return self.get_and_parse_authorized('https://stepik.org/api/sections/' + str(week_id))['sections'][0]['units']
+    def get_resources_list(self, api_resource: str, ids: List[ID]) -> TParsedStepikResponse:
+        response = requests.get('https://stepik.org/api/' + api_resource,
+                                params={"ids[]": ids},
+                                headers={'Authorization': 'Bearer ' + self.token})
+        if response.status_code == 431:  # large header error code
+            # TODO: add actual handling: divide and conquer
+            raise Exception(f"Large header requesting {api_resource} for params (size={len(ids)}): \n{ids}")
+        return json.loads(response.text)
 
-    def get_lesson_id(self, unit_id: ID) -> ID:
-        return self.get_and_parse_authorized('https://stepik.org/api/units/' + str(unit_id))['units'][0]['lesson']
+    def get_list_of_week_ids(self, course_id: ID) -> List[ID]:
+        return \
+            self.get_and_parse_authorized('http://stepik.org/api/courses/' + str(course_id))['courses'][0]['sections']
 
-    def get_step_ids_list(self, lesson_id: ID) -> List[ID]:
-        return self.get_and_parse_authorized('https://stepik.org/api/lessons/' + str(lesson_id))['lessons'][0]['steps']
+    def get_lists_of_units(self, week_ids: List[ID]) -> List[List[ID]]:
+        weeks_data = self.get_resources_list('sections', week_ids)['sections']
+        return [w['units'] for w in weeks_data]
 
-    def get_step(self, step_id: ID) -> Dict:
-        return self.get_and_parse_authorized('https://stepik.org/api/steps/' + str(step_id))
+    def get_list_of_lessons_ids(self, unit_ids: List[ID]) -> List[ID]:  # since one unit contains one lesson
+        units_data = self.get_resources_list('units', unit_ids)['units']
+        return [u['lesson'] for u in units_data]
+
+    def get_lists_of_step_ids(self, lesson_ids: List[ID]) -> List[List[ID]]:
+        lessons_data = self.get_resources_list('lessons', lesson_ids)['lessons']
+        return [l['steps'] for l in lessons_data]
+
+    def get_list_of_step_data(self, step_ids: List[ID]) -> List[Dict]:
+        return self.get_resources_list('steps', step_ids)['steps']
 
 
 @dataclass
@@ -51,32 +66,27 @@ class StepikVideoUrl:
 def get_course_videos_urls_by_section(course_id: ID,
                                       stepik_dispatcher: StepikDispatcher,
                                       only_from_week_number: Optional[int] = None) -> List[List[StepikVideoUrl]]:
-    # TODO: out of course data we only use week_ids!!!
-    course_data = stepik_dispatcher.get_course_page(course_id)
+    week_ids = stepik_dispatcher.get_list_of_week_ids(course_id)
 
-    def get_all_week_ids(stepik_resp):
-        return stepik_resp['courses'][0]['sections']
-
-    week_ids = get_all_week_ids(course_data)
-
-    all_unit_ids = [stepik_dispatcher.get_unit_ids_list(week_id) for week_id in week_ids]
+    all_unit_ids = stepik_dispatcher.get_lists_of_units(week_ids)
 
     videos_by_section: List[List[StepikVideoUrl]] = []
     for week_num in range(1, len(week_ids) + 1):
         if only_from_week_number is not None and week_num != only_from_week_number:
             continue
 
-        all_lesson_ids = [stepik_dispatcher.get_lesson_id(unit_id) for unit_id in all_unit_ids[week_num - 1]]
-        all_step_ids = [stepik_dispatcher.get_step_ids_list(lesson_id) for lesson_id in all_lesson_ids]
+        all_lesson_ids = stepik_dispatcher.get_list_of_lessons_ids(all_unit_ids[week_num - 1])
+        all_step_ids = stepik_dispatcher.get_lists_of_step_ids(all_lesson_ids)
         all_step_ids = [step_id for steps_list in all_step_ids for step_id in steps_list]  # flattening list of step_ids
 
-        all_steps_data = [stepik_dispatcher.get_step(step_id) for step_id in all_step_ids]
+        all_steps_data = stepik_dispatcher.get_list_of_step_data(all_step_ids)
 
         def step_has_video(step_data) -> bool:
-            return step_data['steps'][0]['block']['video']
+            return step_data['block']['video']
 
-        only_video_blocks = [step_info['steps'][0]['block'] for step_info in all_steps_data if step_has_video(step_info)]
+        only_video_blocks = [step_info['block'] for step_info in all_steps_data if step_has_video(step_info)]
         week_videos = [StepikVideoUrl(available_qualities=block['video']['urls']) for block in only_video_blocks]
+
         videos_by_section.append(week_videos)
     return videos_by_section
 
