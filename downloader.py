@@ -10,11 +10,13 @@ from typing import List, Dict, Optional
 from stepik_dispatcher import StepikDispatcher
 
 ID = int  # for type decoration
+Quality = str
+URL = str
 
 
 @dataclass
 class StepikVideoUrl:
-    available_qualities: List[Dict[str, str]]
+    available_qualities: List[Dict[Quality, URL]]
 
 
 def get_course_videos_urls_by_section(course_id: ID,

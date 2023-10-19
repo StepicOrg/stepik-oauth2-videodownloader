@@ -10,6 +10,12 @@ ID = int  # for type decoration
 class StepikDispatcher:
     """Handles authorization on Stepik and retrieves its resources through API"""
 
+    class WrongCredentials(Exception):
+        """Raised when authentication on Stepik failed due to wrong client data"""
+
+    class AuthenticationFailure(Exception):
+        """Raised when authentication on Stepik.org fails with correct client data"""
+
     def __init__(self, client_id: str, client_secret: str,
                  auth_manager=HTTPBasicAuth,  # dependency injections for testing purposes
                  json_parser=json.loads,
@@ -28,7 +34,13 @@ class StepikDispatcher:
     def get_and_parse_authorized(self, url: str) -> Dict:
         return self.json_parser(self.authorized_get(url).text)
 
-    TParsedStepikResource = Dict
+    TParsedStepikResource = Dict  # for type decoration
+
+    class MissingResourceFailure(Exception):
+        """Raised when wrong resource requested from Stepik"""
+
+    class ResourceAcquisitionFailure(Exception):
+        """Raised when Stepik refuse to """
 
     def get_resources_list(self, api_resource: str, ids: List[ID], page: int = 1) -> List[TParsedStepikResource]:
         response = self.authorized_get('http://stepik.org/api/' + api_resource, params={"ids[]": ids, 'page': page})
@@ -43,8 +55,8 @@ class StepikDispatcher:
                 return self.get_resources_list(api_resource, ids[:len(ids) // 2]) + \
                        self.get_resources_list(api_resource, ids[len(ids) // 2:])
             case _:
-                raise Exception(f"Cannot load resources from Stepik.org ({api_resource}): "
-                                f"server responded with {response.status_code}")
+                raise self.ResourceAcquisitionFailure(f"Cannot load resources from Stepik.org ({api_resource}): "
+                                                      f"server responded with {response.status_code}")
 
     def get_list_of_week_ids(self, course_id: ID) -> List[ID]:
         return \
