@@ -7,7 +7,7 @@ import urllib.error
 from dataclasses import dataclass
 
 import sys
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Callable
 from stepik_dispatcher import StepikDispatcher
 
 ID = int  # for type decoration
@@ -22,7 +22,9 @@ class StepikVideoUrl:
 
 def get_course_videos_urls_by_section(course_id: ID,
                                       stepik_dispatcher: StepikDispatcher,
-                                      only_from_week_number: Optional[int] = None) -> List[List[StepikVideoUrl]]:
+                                      only_from_week_number: Optional[int] = None,
+                                      *,
+                                      report_hook: Callable[[int, int, int], None] = None) -> List[List[StepikVideoUrl]]:
     week_ids = stepik_dispatcher.get_list_of_week_ids(course_id)
 
     all_unit_ids = stepik_dispatcher.get_lists_of_units(week_ids)
@@ -31,6 +33,12 @@ def get_course_videos_urls_by_section(course_id: ID,
     for week_num in range(1, len(week_ids) + 1):
         if only_from_week_number is not None and week_num != only_from_week_number:
             continue
+
+        if report_hook:
+            if only_from_week_number is None:
+                report_hook(week_num - 1, 1, len(week_ids))
+            else:
+                report_hook(0, 1, 1)
 
         all_lesson_ids = stepik_dispatcher.get_list_of_lessons_ids(all_unit_ids[week_num - 1])
         all_step_ids = stepik_dispatcher.get_lists_of_step_ids(all_lesson_ids)
@@ -45,6 +53,13 @@ def get_course_videos_urls_by_section(course_id: ID,
         week_videos = [StepikVideoUrl(available_qualities=block['video']['urls']) for block in only_video_blocks]
 
         videos_by_section.append(week_videos)
+
+    if report_hook:
+        if only_from_week_number is None:
+            report_hook(len(week_ids), 1, len(week_ids))
+        else:
+            report_hook(1, 1, 1)
+
     return videos_by_section
 
 
@@ -104,17 +119,22 @@ def main():
     args = parse_arguments()
 
     stepik_dispatcher = StepikDispatcher(args.client_id, args.client_secret)
-    # TODO: add some kind of progress bar here
+
+    print("Loading information about videos per section")
     video_urls_by_section: List[List[StepikVideoUrl]] = get_course_videos_urls_by_section(
         args.course_id,
         stepik_dispatcher,
-        only_from_week_number=args.week_id
+        only_from_week_number=args.week_id,
+        report_hook=reporthook
     )
+    print("Done")
 
     # Loop through all week in a course and
     # download all videos or
     # download only for the week_id is passed as an argument.
     for week_num, video_urls in enumerate(video_urls_by_section, start=1):
+        if args.week_id is not None:
+            week_num = args.week_id
 
         # url: str, error_msg: Optional[str]
         UrlWithErrorMsg = collections.namedtuple("UrlWithErrorMsg", ['url', 'error_msg'])
