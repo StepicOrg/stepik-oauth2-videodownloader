@@ -1,48 +1,67 @@
 import argparse
-import json
+import collections
 import os
 import urllib
 import urllib.request
-import requests
+import urllib.error
+from dataclasses import dataclass
+
 import sys
-from requests.auth import HTTPBasicAuth
+from functools import reduce
+from typing import List, Dict, Optional, Callable
+from stepik_dispatcher import StepikDispatcher
+
+ID = int  # for type decoration
+Quality = str
+URL = str
 
 
-def get_course_page(api_url, token):
-    return json.loads(requests.get(api_url, headers={'Authorization': 'Bearer ' + token}).text)
+@dataclass
+class StepikVideoUrl:
+    available_qualities: List[Dict[Quality, URL]]
 
 
-def get_all_weeks(stepik_resp):
-    return stepik_resp['courses'][0]['sections']
+def get_course_videos_urls_by_section(course_id: ID,
+                                      stepik_dispatcher: StepikDispatcher,
+                                      only_from_week_number: Optional[int] = None,
+                                      *,
+                                      report_hook: Callable[[int, int, int], None] = None) -> List[List[StepikVideoUrl]]:
+    week_ids = stepik_dispatcher.get_list_of_week_ids(course_id)
 
+    all_unit_ids = stepik_dispatcher.get_lists_of_units(week_ids)
 
-def get_unit_list(section_list, token):
-    resp = [json.loads(requests.get('https://stepik.org/api/sections/' + str(arr),
-                                    headers={'Authorization': 'Bearer ' + token}).text)
-            for arr in section_list]
-    return [section['sections'][0]['units'] for section in resp]
+    videos_by_section: List[List[StepikVideoUrl]] = []
+    for week_num in range(1, len(week_ids) + 1):
+        if only_from_week_number is not None and week_num != only_from_week_number:
+            continue
 
+        if report_hook:
+            if only_from_week_number is None:
+                report_hook(week_num - 1, 1, len(week_ids))
+            else:
+                report_hook(0, 1, 1)
 
-def get_steps_list(units_list, week, token):
-    data = [json.loads(requests.get('https://stepik.org/api/units/' + str(unit_id),
-                                    headers={'Authorization': 'Bearer ' + token}).text)
-            for unit_id in units_list[week - 1]]
-    lesson_lists = [elem['units'][0]['lesson'] for elem in data]
-    data = [json.loads(requests.get('https://stepik.org/api/lessons/' + str(lesson_id),
-                                    headers={'Authorization': 'Bearer ' + token}).text)['lessons'][0]['steps']
-            for lesson_id in lesson_lists]
-    return [item for sublist in data for item in sublist]
+        all_lesson_ids = stepik_dispatcher.get_list_of_lessons_ids(all_unit_ids[week_num - 1])
+        all_step_ids = stepik_dispatcher.get_lists_of_step_ids(all_lesson_ids)
+        all_step_ids = [step_id for steps_list in all_step_ids for step_id in steps_list]  # flattening list of step_ids
 
+        all_steps_data = stepik_dispatcher.get_list_of_step_data(all_step_ids)
 
-def get_only_video_steps(step_list, token):
-    resp_list = list()
-    for s in step_list:
-        resp = json.loads(requests.get('https://stepik.org/api/steps/' + str(s),
-                                       headers={'Authorization': 'Bearer ' + token}).text)
-        if resp['steps'][0]['block']['video']:
-            resp_list.append(resp['steps'][0]['block'])
-    print('Only video:', len(resp_list))
-    return resp_list
+        def step_has_video(step_data) -> bool:
+            return step_data['block']['video']
+
+        only_video_blocks = [step_info['block'] for step_info in all_steps_data if step_has_video(step_info)]
+        week_videos = [StepikVideoUrl(available_qualities=block['video']['urls']) for block in only_video_blocks]
+
+        videos_by_section.append(week_videos)
+
+    if report_hook:
+        if only_from_week_number is None:
+            report_hook(len(week_ids), 1, len(week_ids))
+        else:
+            report_hook(1, 1, 1)
+
+    return videos_by_section
 
 
 def parse_arguments():
@@ -63,6 +82,7 @@ def parse_arguments():
 
     parser.add_argument('-i', '--course_id',
                         help='course id',
+                        type=int,
                         required=True)
 
     parser.add_argument('-w', '--week_id',
@@ -83,74 +103,70 @@ def parse_arguments():
 
     return args
 
-def reporthook(blocknum, blocksize, totalsize): # progressbar
+
+def reporthook(blocknum, blocksize, totalsize):  # progressbar
     readsofar = blocknum * blocksize
     if totalsize > 0:
         percent = readsofar * 1e2 / totalsize
         s = "\r%5.1f%% %*d / %d" % (percent, len(str(totalsize)), readsofar, totalsize)
         sys.stderr.write(s)
-        if readsofar >= totalsize: # near the end
+        if readsofar >= totalsize:  # near the end
             sys.stderr.write("\n")
-    else: # total size is unknown
+    else:  # total size is unknown
         sys.stderr.write("read %d\n" % (readsofar,))
+
 
 def main():
     args = parse_arguments()
 
-    """
-    Example how to receive token from Stepik.org
-    Token should also been add to every request header
-    example: requests.get(api_url, headers={'Authorization': 'Bearer '+ token})
-    """
+    stepik_dispatcher = StepikDispatcher(args.client_id, args.client_secret)
 
-    auth = HTTPBasicAuth(args.client_id, args.client_secret)
-    resp = requests.post('https://stepik.org/oauth2/token/', data={'grant_type': 'client_credentials'}, auth=auth)
-    token = json.loads(resp.text)['access_token']
+    print("Loading information about videos per section")
+    video_urls_by_section: List[List[StepikVideoUrl]] = get_course_videos_urls_by_section(
+        args.course_id,
+        stepik_dispatcher,
+        only_from_week_number=args.week_id,
+        report_hook=reporthook
+    )
+    print("Done")
+    videos_to_download_count = reduce(lambda p, l: p + len(l), video_urls_by_section, 0)
+    print(f"There is {videos_to_download_count} videos to download.")
 
-    course_data = get_course_page('http://stepik.org/api/courses/' + args.course_id, token)
-
-    weeks_num = get_all_weeks(course_data)
-
-    all_units = get_unit_list(weeks_num, token)
     # Loop through all week in a course and
     # download all videos or
     # download only for the week_id is passed as an argument.
-    for week in range(1, len(weeks_num)+1):
-        # Skip if week_id is passed as an argument
-        args_week_id = str(args.week_id)
-        if args_week_id != "None":
-            # week_id starts from 1 and week counts from 0!
-            if week != int(args_week_id):
-                continue
+    for week_num, video_urls in enumerate(video_urls_by_section, start=1):
+        if args.week_id is not None:
+            week_num = args.week_id
 
-        all_steps = get_steps_list(all_units, week, token)
-
-        only_video_steps = get_only_video_steps(all_steps, token)
-
-        url_list_with_q = []
+        # url: str, error_msg: Optional[str]
+        UrlWithErrorMsg = collections.namedtuple("UrlWithErrorMsg", ['url', 'error_msg'])
+        download_list: List[UrlWithErrorMsg] = []
 
         # Loop through videos and store the url link and the quality.
-        for video_step in only_video_steps:
+        for video in video_urls:
             video_link = None
             msg = None
 
             # Check a video quality.
-            for url in video_step['video']['urls']:
-                if url['quality'] == args.quality:
-                    video_link = url['url']
+            for link in video.available_qualities:
+                match link:
+                    case {'quality': args.quality, 'url': url}:
+                        video_link = url
+                        break
 
-            # If the is no required video quality then download
+            # If there is no required video quality then download
             # with the best available quality.
             if video_link is None:
                 msg = "The requested quality = {} is not available!".format(args.quality)
 
-                video_link = video_step['video']['urls'][0]['url']
+                video_link = video.available_qualities[0]['url']
 
             # Store link and quality.
-            url_list_with_q.append({'url': video_link, 'msg': msg})
+            download_list.append(UrlWithErrorMsg(url=video_link, error_msg=msg))
 
         # Compose a folder name.
-        folder_name = os.path.join(args.output_dir, args.course_id, 'week_' + str(week))
+        folder_name = os.path.join(args.output_dir, str(args.course_id), 'week_' + str(week_num))
 
         # Create a folder if needed.
         if not os.path.isdir(folder_name):
@@ -166,16 +182,16 @@ def main():
 
         print('Folder_name ', folder_name)
 
-        for week, el in enumerate(url_list_with_q):
+        for video_num, (url, error_msg) in enumerate(download_list):
             # Print a message if something wrong.
-            if el['msg']:
-                print("{}".format(el['msg']))
+            if error_msg:
+                print(error_msg)
 
-            filename = os.path.join(folder_name, 'Video_' + str(week) + '.mp4')
+            filename = os.path.join(folder_name, 'Video_' + str(video_num) + '.mp4')
             if not os.path.isfile(filename):
                 try:
                     print('Downloading file ', filename)
-                    urllib.request.urlretrieve(el['url'], filename, reporthook)
+                    urllib.request.urlretrieve(url, filename, reporthook)
                     print('Done')
                 except urllib.error.ContentTooShortError:
                     os.remove(filename)
