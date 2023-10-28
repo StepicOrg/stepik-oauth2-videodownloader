@@ -1,4 +1,5 @@
 import argparse
+import collections
 import os
 import urllib
 import urllib.request
@@ -103,17 +104,21 @@ def main():
     args = parse_arguments()
 
     stepik_dispatcher = StepikDispatcher(args.client_id, args.client_secret)
-
-    video_urls_by_section = get_course_videos_urls_by_section(args.course_id,
-                                                              stepik_dispatcher,
-                                                              only_from_week_number=args.week_id)
+    # TODO: add some kind of progress bar here
+    video_urls_by_section: List[List[StepikVideoUrl]] = get_course_videos_urls_by_section(
+        args.course_id,
+        stepik_dispatcher,
+        only_from_week_number=args.week_id
+    )
 
     # Loop through all week in a course and
     # download all videos or
     # download only for the week_id is passed as an argument.
     for week_num, video_urls in enumerate(video_urls_by_section, start=1):
 
-        url_list_with_q = []
+        # url: str, error_msg: Optional[str]
+        UrlWithErrorMsg = collections.namedtuple("UrlWithErrorMsg", ['url', 'error_msg'])
+        download_list: List[UrlWithErrorMsg] = []
 
         # Loop through videos and store the url link and the quality.
         for video in video_urls:
@@ -135,7 +140,7 @@ def main():
                 video_link = video.available_qualities[0]['url']
 
             # Store link and quality.
-            url_list_with_q.append({'url': video_link, 'msg': msg})
+            download_list.append(UrlWithErrorMsg(url=video_link, error_msg=msg))
 
         # Compose a folder name.
         folder_name = os.path.join(args.output_dir, str(args.course_id), 'week_' + str(week_num))
@@ -154,16 +159,16 @@ def main():
 
         print('Folder_name ', folder_name)
 
-        for video_num, el in enumerate(url_list_with_q):
+        for video_num, (url, error_msg) in enumerate(download_list):
             # Print a message if something wrong.
-            if el['msg']:
-                print("{}".format(el['msg']))
+            if error_msg:
+                print(error_msg)
 
             filename = os.path.join(folder_name, 'Video_' + str(video_num) + '.mp4')
             if not os.path.isfile(filename):
                 try:
                     print('Downloading file ', filename)
-                    urllib.request.urlretrieve(el['url'], filename, reporthook)
+                    urllib.request.urlretrieve(url, filename, reporthook)
                     print('Done')
                 except urllib.error.ContentTooShortError:
                     os.remove(filename)
