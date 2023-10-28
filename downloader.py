@@ -7,6 +7,7 @@ import urllib.error
 from dataclasses import dataclass
 
 import sys
+from functools import reduce
 from typing import List, Dict, Optional, Callable
 from stepik_dispatcher import StepikDispatcher
 
@@ -128,6 +129,8 @@ def main():
         report_hook=reporthook
     )
     print("Done")
+    videos_to_download_count = reduce(lambda p, l: p + len(l), video_urls_by_section, 0)
+    print(f"There is {videos_to_download_count} videos to download.")
 
     # Loop through all week in a course and
     # download all videos or
