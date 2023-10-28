@@ -102,14 +102,11 @@ def reporthook(blocknum, blocksize, totalsize):  # progressbar
 def main():
     args = parse_arguments()
 
-    """
-    Example how to receive token from Stepik.org
-    Token should also been add to every request header
-    example: requests.get(api_url, headers={'Authorization': 'Bearer '+ token})
-    """
     stepik_dispatcher = StepikDispatcher(args.client_id, args.client_secret)
 
-    video_urls_by_section = get_course_videos_urls_by_section(args.course_id, stepik_dispatcher, args.week_id)
+    video_urls_by_section = get_course_videos_urls_by_section(args.course_id,
+                                                              stepik_dispatcher,
+                                                              only_from_week_number=args.week_id)
 
     # Loop through all week in a course and
     # download all videos or

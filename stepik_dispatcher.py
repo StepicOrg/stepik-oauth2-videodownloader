@@ -20,13 +20,25 @@ class StepikDispatcher:
                  auth_manager=HTTPBasicAuth,  # dependency injections for testing purposes
                  json_parser=json.loads,
                  net_manager=requests):
+
+        """
+        Example how to receive token from Stepik.org
+        Token should also been add to every request header
+        example: requests.get(api_url, headers={'Authorization': 'Bearer '+ token})
+        see authorized_get method
+        """
         auth = auth_manager(client_id, client_secret)
         resp = net_manager.post('https://stepik.org/oauth2/token/',
                                 data={'grant_type': 'client_credentials'}, auth=auth)
         self.json_parser = json_parser
         self.net_manager = net_manager
-        self.token: str = self.json_parser(resp.text)['access_token']
-        # TODO: add check whether we get the token?
+        match resp.status_code:
+            case 200:
+                self.token: str = self.json_parser(resp.text)['access_token']
+            case 401:
+                raise self.WrongCredentials("Wrong client_id or client_secret")
+            case _:
+                raise self.AuthenticationFailure(f"Server responded with code {resp.status_code}")
 
     def authorized_get(self, url: str, params: Optional[Dict] = None):  # return type is self.net_manager.Response obj
         return self.net_manager.get(url, headers={'Authorization': 'Bearer ' + self.token}, params=params)
