@@ -46,13 +46,13 @@ class StepikDispatcher:
     def get_and_parse_authorized(self, url: str) -> Dict:
         return self.json_parser(self.authorized_get(url).text)
 
-    TParsedStepikResource = Dict  # for type decoration
-
     class MissingResourceFailure(Exception):
         """Raised when wrong resource requested from Stepik"""
 
     class ResourceAcquisitionFailure(Exception):
-        """Raised when Stepik refuse to """
+        """Raised when Stepik answers with not OK code on resource request"""
+
+    TParsedStepikResource = Dict  # for type decoration
 
     def get_resources_list(self, api_resource: str, ids: List[ID], page: int = 1) -> List[TParsedStepikResource]:
         response = self.authorized_get('http://stepik.org/api/' + api_resource, params={"ids[]": ids, 'page': page})
@@ -68,7 +68,7 @@ class StepikDispatcher:
                        self.get_resources_list(api_resource, ids[len(ids) // 2:])
             case _:
                 raise self.ResourceAcquisitionFailure(f"Cannot load resources from Stepik.org ({api_resource}): "
-                                                      f"server responded with {response.status_code}")
+                                                      f"server responded with {response.status_code} code")
 
     def get_list_of_week_ids(self, course_id: ID) -> List[ID]:
         return \
